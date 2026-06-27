@@ -35,11 +35,17 @@ CREATE TABLE IF NOT EXISTS sessions (
     top_sustained_midi    INTEGER,
     bottom_sustained_midi INTEGER,
     total_low_midi        INTEGER,
-    total_high_midi       INTEGER
+    total_high_midi       INTEGER,
+    transpose_semitones   INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_sessions_created_at ON sessions(created_at);
 CREATE INDEX IF NOT EXISTS idx_sessions_audio_hash ON sessions(audio_hash);
 """
+
+# Best-effort migrations for columns we added after the initial schema.
+_MIGRATIONS = [
+    "ALTER TABLE sessions ADD COLUMN transpose_semitones INTEGER NOT NULL DEFAULT 0",
+]
 
 
 def _connect(db_path: Path) -> sqlite3.Connection:
@@ -54,6 +60,12 @@ def init(db_path: Path) -> None:
     with _LOCK:
         with _connect(db_path) as conn:
             conn.executescript(_SCHEMA)
+            for migration in _MIGRATIONS:
+                try:
+                    conn.execute(migration)
+                except sqlite3.OperationalError:
+                    # Column already exists, etc. — safe to ignore.
+                    pass
             conn.commit()
 
 
@@ -88,6 +100,7 @@ def insert_session(db_path: Path, row: dict[str, Any]) -> str:
         "bottom_sustained_midi",
         "total_low_midi",
         "total_high_midi",
+        "transpose_semitones",
     ]
     placeholders = ",".join("?" * len(columns))
     values = [row.get(c) for c in columns]

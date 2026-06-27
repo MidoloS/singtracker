@@ -22,6 +22,26 @@ export function midiToNoteName(midi: number): string {
   return `${names[((rounded % 12) + 12) % 12]}${Math.floor(rounded / 12) - 1}`;
 }
 
+/** Shift a key name (e.g. "A mayor", "C# menor") by `semitones`. Returns the
+ *  original string if it doesn't match the expected pattern. */
+export function transposeKeyName(name: string | undefined | null, semitones: number): string {
+  if (!name) return '?';
+  if (!semitones) return name;
+  const names = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+  const m = name.match(/^([A-G][#b]?)(.*)$/);
+  if (!m) return name;
+  const [, root, rest] = m;
+  // Normalize flats to sharps for indexing.
+  const flatToSharp: Record<string, string> = {
+    Db: 'C#', Eb: 'D#', Gb: 'F#', Ab: 'G#', Bb: 'A#',
+  };
+  const r = flatToSharp[root] ?? root;
+  const idx = names.indexOf(r);
+  if (idx === -1) return name;
+  const newRoot = names[((idx + semitones) % 12 + 12) % 12];
+  return `${newRoot}${rest}`;
+}
+
 /**
  * Real-time pitch detector reading from an AnalyserNode.
  * Call `read()` once per animation frame.

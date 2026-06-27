@@ -1,8 +1,14 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import './app.css';
-import { LivePitch } from './pitch';
+import { LivePitch, transposeKeyName } from './pitch';
 import { LaneRenderer } from './renderer';
-import { submitFile, waitForJob, audioUrl, type NotesPayload } from './notes';
+import {
+  submitFile,
+  waitForJob,
+  audioUrl,
+  transposeNotesPayload,
+  type NotesPayload,
+} from './notes';
 import { computeReport, type Report, type Sample } from './report';
 import { OverviewRenderer } from './overview';
 import { loadSources, Mixer } from './mixer';
@@ -26,6 +32,7 @@ type Stage =
       buffer: AudioBuffer;
       notes: NotesPayload;
       audioHash?: string;
+      transposeSemitones: number;
     }
   | {
       kind: 'done';
@@ -36,6 +43,7 @@ type Stage =
       report: Report;
       samples: Sample[];
       userBlob?: Blob;
+      transposeSemitones: number;
     };
 
 async function decodeFile(file: File): Promise<AudioBuffer> {
@@ -138,13 +146,14 @@ function PracticeView({
         <Ready
           fileName={stage.fileName}
           notes={stage.notes}
-          onStart={() =>
+          onStart={(transposeSemitones) =>
             setStage({
               kind: 'playing',
               fileName: stage.fileName,
               buffer: stage.buffer,
               notes: stage.notes,
               audioHash: stage.audioHash,
+              transposeSemitones,
             })
           }
           onReset={() => setStage({ kind: 'idle' })}
@@ -155,8 +164,10 @@ function PracticeView({
         <LiveView
           buffer={stage.buffer}
           notes={stage.notes}
+          transposeSemitones={stage.transposeSemitones}
           onStop={(samples, elapsed, userBlob) => {
-            const report = computeReport(samples, stage.notes, elapsed);
+            const transposed = transposeNotesPayload(stage.notes, stage.transposeSemitones);
+            const report = computeReport(samples, transposed, elapsed);
             setStage({
               kind: 'done',
               fileName: stage.fileName,
@@ -166,6 +177,7 @@ function PracticeView({
               report,
               samples,
               userBlob,
+              transposeSemitones: stage.transposeSemitones,
             });
           }}
         />
@@ -179,6 +191,7 @@ function PracticeView({
           samples={stage.samples}
           userBlob={stage.userBlob}
           audioHash={stage.audioHash}
+          transposeSemitones={stage.transposeSemitones}
           onAgain={() =>
             setStage({
               kind: 'playing',
@@ -186,6 +199,7 @@ function PracticeView({
               buffer: stage.buffer,
               notes: stage.notes,
               audioHash: stage.audioHash,
+              transposeSemitones: stage.transposeSemitones,
             })
           }
           onReset={() => setStage({ kind: 'idle' })}
@@ -244,9 +258,11 @@ function Ready({
 }: {
   fileName: string;
   notes: NotesPayload;
-  onStart: () => void;
+  onStart: (transposeSemitones: number) => void;
   onReset: () => void;
 }) {
+  const [transpose, setTranspose] = useState(0);
+  const targetKey = transposeKeyName(notes.key?.name, transpose);
   return (
     <div class="card">
       <div class="card-title">Listo para cantar</div>
@@ -254,8 +270,36 @@ function Ready({
         {fileName} · {notes.notes.length} notas · {notes.duration.toFixed(1)}s · tonalidad{' '}
         {notes.key?.name ?? '?'}
       </div>
+
+      <label class="slider transpose-slider">
+        <div class="slider-head">
+          <span>Transponer melodía</span>
+          <span class="time">
+            {transpose > 0 ? `+${transpose}` : transpose} semitonos
+            {transpose !== 0 && ` · objetivo en ${targetKey}`}
+          </span>
+        </div>
+        <input
+          type="range"
+          min={-12}
+          max={12}
+          step={1}
+          value={transpose}
+          onInput={(e) =>
+            setTranspose(parseInt((e.currentTarget as HTMLInputElement).value, 10))
+          }
+        />
+        <div class="slider-marks">
+          <span>−12</span>
+          <button class="preset" onClick={() => setTranspose(0)}>
+            0
+          </button>
+          <span>+12</span>
+        </div>
+      </label>
+
       <div class="row">
-        <button class="primary" onClick={onStart}>
+        <button class="primary" onClick={() => onStart(transpose)}>
           Empezar
         </button>
         <button class="ghost" onClick={onReset}>
@@ -265,6 +309,14 @@ function Ready({
       <p class="hint">
         Te va a pedir permiso de micrófono. Usá auriculares para que la canción
         no se cuele en el mic.
+        {transpose !== 0 && (
+          <>
+            {' '}<br />
+            <b>Ojo:</b> el carril está transpuesto pero el audio sigue en la tonalidad
+            original. Vas a tener que cantar contra el instrumental — subí "bajar voz
+            del artista" cuando reproduzcas tu take en el reporte.
+          </>
+        )}
       </p>
     </div>
   );
@@ -273,10 +325,12 @@ function Ready({
 function LiveView({
   buffer,
   notes,
+  transposeSemitones,
   onStop,
 }: {
   buffer: AudioBuffer;
   notes: NotesPayload;
+  transposeSemitones: number;
   onStop: (samples: Sample[], elapsed: number, userBlob?: Blob) => void;
 }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -357,7 +411,8 @@ function LiveView({
         }
 
         if (!canvasRef.current) throw new Error('Canvas no disponible');
-        renderer = new LaneRenderer({ canvas: canvasRef.current, notes });
+        const renderNotes = transposeNotesPayload(notes, transposeSemitones);
+        renderer = new LaneRenderer({ canvas: canvasRef.current, notes: renderNotes });
 
         for (let i = 3; i > 0; i--) {
           if (canceled) return;
@@ -408,12 +463,18 @@ function LiveView({
       micStream?.getTracks().forEach((t) => t.stop());
       audioCtx?.close();
     };
-  }, [buffer, notes]);
+  }, [buffer, notes, transposeSemitones]);
 
   return (
     <div class="live">
       <div class="live-bar">
         <span class="status">{status}</span>
+        {transposeSemitones !== 0 && (
+          <span class="chip">
+            transpuesto {transposeSemitones > 0 ? '+' : ''}
+            {transposeSemitones} st
+          </span>
+        )}
         <button class="ghost" onClick={finish}>
           Cortar
         </button>
@@ -434,6 +495,7 @@ function Done({
   samples,
   userBlob,
   audioHash,
+  transposeSemitones,
   onAgain,
   onReset,
 }: {
@@ -443,6 +505,7 @@ function Done({
   samples: Sample[];
   userBlob?: Blob;
   audioHash?: string;
+  transposeSemitones: number;
   onAgain: () => void;
   onReset: () => void;
 }) {
@@ -462,7 +525,8 @@ function Done({
       file_name: fileName,
       audio_hash: audioHash,
       song_duration: notes.duration,
-      song_key: notes.key?.name ?? null,
+      song_key: transposeKeyName(notes.key?.name, transposeSemitones),
+      transpose_semitones: transposeSemitones,
     })
       .then(() => {
         if (!canceled) setSaveState('saved');
@@ -488,7 +552,14 @@ function Done({
         </span>
       </div>
       <div class="card-sub">
-        {fileName} · {mm}:{ss} de canto · tonalidad {notes.key?.name ?? '?'}
+        {fileName} · {mm}:{ss} de canto · tonalidad{' '}
+        {transposeKeyName(notes.key?.name, transposeSemitones)}
+        {transposeSemitones !== 0 && (
+          <span class="chip" style={{ marginLeft: 8 }}>
+            {transposeSemitones > 0 ? '+' : ''}
+            {transposeSemitones} st
+          </span>
+        )}
       </div>
 
       {report.thin && (
@@ -571,7 +642,12 @@ function Done({
         </div>
       </div>
 
-      <Playback notes={notes} samples={samples} userBlob={userBlob} audioHash={audioHash} />
+      <Playback
+        notes={transposeNotesPayload(notes, transposeSemitones)}
+        samples={samples}
+        userBlob={userBlob}
+        audioHash={audioHash}
+      />
 
       <div class="row">
         <button class="primary" onClick={onAgain}>

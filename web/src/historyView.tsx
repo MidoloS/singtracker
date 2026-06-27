@@ -404,6 +404,7 @@ function SessionTable({ rows }: { rows: SessionRow[] }) {
           <tr>
             <th>Fecha</th>
             <th>Canción</th>
+            <th>Transp.</th>
             <th>Duración</th>
             <th>Afinación</th>
             <th>Error med.</th>
@@ -415,6 +416,11 @@ function SessionTable({ rows }: { rows: SessionRow[] }) {
             <tr>
               <td>{formatDate(r.created_at)}</td>
               <td>{r.file_name}</td>
+              <td>
+                {r.transpose_semitones === 0
+                  ? '—'
+                  : `${r.transpose_semitones > 0 ? '+' : ''}${r.transpose_semitones} st`}
+              </td>
               <td>{formatDuration(r.elapsed)}</td>
               <td>{r.accuracy_pct.toFixed(0)}%</td>
               <td>

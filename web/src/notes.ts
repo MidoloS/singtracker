@@ -24,6 +24,18 @@ export function audioUrl(audioHash: string, kind: 'vocals' | 'instrumental'): st
   return `${SERVER}/audio/${audioHash}/${kind}`;
 }
 
+/** Return a copy of `payload` with every note + the min/max midi shifted by
+ *  `semitones`. Pure: doesn't mutate the input. */
+export function transposeNotesPayload(payload: NotesPayload, semitones: number): NotesPayload {
+  if (!semitones) return payload;
+  return {
+    ...payload,
+    midi_min: payload.midi_min != null ? payload.midi_min + semitones : null,
+    midi_max: payload.midi_max != null ? payload.midi_max + semitones : null,
+    notes: payload.notes.map((n) => ({ ...n, midi: n.midi + semitones })),
+  };
+}
+
 export async function submitFile(file: File): Promise<string> {
   const fd = new FormData();
   fd.append('file', file);

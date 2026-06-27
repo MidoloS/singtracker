@@ -229,6 +229,7 @@ class SessionIn(BaseModel):
     bottom_sustained_midi: Optional[int] = None
     total_low_midi: Optional[int] = None
     total_high_midi: Optional[int] = None
+    transpose_semitones: int = 0
 
 
 @app.post("/sessions")

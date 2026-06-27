@@ -20,6 +20,7 @@ export type SessionRow = {
   bottom_sustained_midi: number | null;
   total_low_midi: number | null;
   total_high_midi: number | null;
+  transpose_semitones: number;
 };
 
 export type TimelinePoint = {
@@ -92,6 +93,7 @@ export async function saveSession(
     audio_hash?: string;
     song_duration: number;
     song_key?: string | null;
+    transpose_semitones?: number;
   },
 ): Promise<{ id: string; created_at: string }> {
   const body = {
@@ -110,6 +112,7 @@ export async function saveSession(
     bottom_sustained_midi: report.bottomSustainedMidi,
     total_low_midi: report.totalLowMidi,
     total_high_midi: report.totalHighMidi,
+    transpose_semitones: meta.transpose_semitones ?? 0,
   };
   const r = await fetch(`${SERVER}/sessions`, {
     method: 'POST',
