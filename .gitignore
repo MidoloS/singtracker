@@ -1,0 +1,47 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual envs
+.venv/
+venv/
+env/
+
+# Derived artefacts del server local:
+#  - .cache/<hash>/         → vocals + instrumental WAVs (~80MB cada uno)
+#  - .cache/work-<job_id>/  → demucs intermedio
+#  - .cache/sessions.db     → tu historial. Local; si querés sincronizarlo
+#                             entre máquinas, copialo a mano o commiteá
+#                             la línea de abajo.
+.cache/
+
+# Audio del usuario en la raíz (test files). Si querés versionar uno
+# específico, hacé `git add -f tu_archivo.mp3`.
+/*.mp3
+/*.wav
+/*.flac
+/*.m4a
+
+# Node / Vite (web/ ya tiene su propio .gitignore pero por si acaso)
+node_modules/
+dist/
+.vite/
+*.local
+*.tsbuildinfo
+
+# Claude Code (settings personales + lock de tasks)
+.claude/settings.local.json
+.claude/scheduled_tasks.lock
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editores
+.idea/
+*.swp
+*~

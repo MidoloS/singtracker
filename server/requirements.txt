@@ -1,0 +1,4 @@
+# Mínimo extra que precisa local_server.py por encima de lo que ya usa script.py
+fastapi
+uvicorn[standard]
+python-multipart
