@@ -1,179 +1,133 @@
-# README — App de práctica de canto (nombre tentativo)
+# singimprove
 
-Práctica de canto canción-específica: cantás un tema sobre la voz real del artista,
-ves en tiempo real qué tan cerca estás de cada nota, y al terminar recibís un
-reporte preciso (afinación, rango, vibrato, dinámica) que podés compartir.
+App local para practicar canto sobre canciones reales y medir si vas
+mejorando. Subís un MP3, te separa la voz del artista con Demucs, te muestra
+la melodía como carril estilo karaoke, te escucha por el micrófono mientras
+cantás y al final te da un reporte con tu afinación, rango vocal y un
+historial filtrable por fecha.
 
-> **Diferencial.** No es otro afinador de escalas ni karaoke con puntaje grueso.
-> Mide tu interpretación contra la **voz real de la canción que elegiste**, con
-> precisión a nivel de cents, y te dice exactamente dónde te vas de tono y hasta
-> dónde llega tu voz.
-
----
-
-## 1. Principio de diseño
-
-El sistema tiene **dos fases con propósitos distintos**, y no hay que mezclarlas:
-
-- **En vivo = guía en el momento.** Mientras cantás, tu atención para mirar la
-  pantalla es casi nula (respirás, afinás, leés la letra). La vista en vivo
-  muestra **una sola cosa de un vistazo**: la nota que viene y qué tan encima
-  estás. Nada analítico.
-- **Reporte = diagnóstico.** Toda la riqueza (rango, vibrato, tendencias, gráficos
-  detallados, coaching) va al final, que es cuando el usuario tiene cabeza para
-  absorberla.
-
-Además, un split técnico clave:
-
-- **La canción se preprocesa una sola vez** (separación de voz + análisis) y se
-  **cachea**. No se procesa en vivo.
-- **Tu voz se detecta en vivo en el navegador** (client-side). La referencia ya
-  está precalculada; las dos se dibujan sincronizadas contra el reloj de
-  reproducción del tema. Por eso en la vista en vivo **no hace falta alinear
-  (DTW)**: cantás sobre el tema que suena, ya está sincronizado.
+Todo corre en tu máquina. No hay cuenta, no hay cloud, no hay tracking.
 
 ---
 
-## 2. Flujo del usuario (v1)
+## Qué hace
 
-1. **Cargar un MP3.** El usuario sube la canción que quiere cantar.
-2. **Procesamiento con barra de carga.** Se separa la voz del artista y se analiza.
-   - La barra **estima ~4 minutos** (conservador). Si el proceso real termina antes
-     (~2 min típico), la barra **completa rápido hasta el 100%**. Estimar largo y
-     entregar rápido = sorpresa agradable, nunca al revés.
-3. **Preparación.** Aparece un texto **"Preparate para cantar"** + cuenta regresiva,
-   y arranca la canción **con la voz del artista** sonando.
-4. **Vista en vivo.** Se muestra el gráfico en tiempo real de ambas voces (ver §3):
-   la línea objetivo del artista y tu voz, con feedback de qué tan cerca de las
-   notas estás.
-5. **Corte.** El tema corre hasta el final, pero el usuario puede **cortar antes con
-   un botón**.
-6. **Reporte.** Al terminar (o cortar), se genera el reporte (ver §4).
-7. **Compartir.** El reporte se puede **compartir fácil con amigos** (link / tarjeta).
-
----
-
-## 3. Vista en vivo — especificación
-
-**Gráfico elegido: carril de notas (estilo karaoke / Guitar Hero).** No una línea de
-frecuencia cruda. Es espacial e instantáneo: el usuario no lee números, "empareja
-alturas".
-
-- **Notas objetivo**: barras horizontales que **scrollean hacia una línea fija de
-  "ahora"**. Cada barra está a la altura de su nota y dura lo que dura la nota.
-- **Tu voz**: un cursor/puntito en vivo que tratás de mantener **sobre** la barra
-  actual. Arriba = vas alto, abajo = vas calado, encima = clavado.
-- **Color**: verde si estás dentro de la tolerancia, rojo si te fuiste.
-- **Anticipación**: se muestran **las notas que vienen** a la derecha del "ahora"
-  (la canción es conocida → conocemos el futuro). Enseña fraseo y preparación.
-- **Eje vertical en semitonos**, no en Hz (distancias perceptualmente parejas).
-- **Octava-invariante**: la vista se centra en la nota objetivo ±1 octava (o pliega
-  octavas). Si el usuario canta en una octava más cómoda, su cursor igual cae cerca
-  del carril en vez de irse de pantalla.
-- **Tolerancia generosa en vivo**: la zona verde es ancha. En el momento hay que
-  alentar, no mostrar un semáforo en rojo permanente. La crítica precisa va al
-  reporte, no mientras canta.
-- **Timing implícito**: si tu cursor enciende la barra cuando llega al "ahora",
-  entraste a tiempo. No necesita su propio gráfico en vivo.
-- **Indicador minimalista de "cómo vengo"**: un score corriendo / racha / halo que
-  brilla cuando estás afinado. Nada más.
-- **Dinámica (opcional, secundario)**: el grosor o brillo del cursor puede codificar
-  el volumen.
-
-**Objetivo limpio.** El carril NO usa la voz cruda separada (que trae artefactos y
-saltos de octava del detector). Usa una **partitura de notas cuantizada** derivada
-del preprocesado (notas snappeadas a la tonalidad). La voz cruda se guarda aparte
-para el análisis fino del reporte.
+1. **Subís cualquier MP3.** El server local lo procesa una vez con Demucs
+   (separación de voz) + pyin (extracción de F0) y cachea el resultado por
+   hash. Volver a subir la misma canción es instantáneo.
+2. **Cantás sobre la canción.** En el browser ves un carril con las notas
+   objetivo desplazándose hacia una línea de "ahora" y un cursor de tu voz
+   en tiempo real (verde si afinás, rojo si te vas). Comparación
+   octava-invariante: podés cantar en tu octava cómoda.
+3. **Reporte al cortar.** Calcula afinación (% notas dentro de ±50¢), error
+   mediano en cents, tendencia (alto/bajo), techo y piso sostenidos, y
+   extensión total de tu voz en esa toma. Muestra un canvas overview
+   scrollable con tu performance contra la referencia.
+4. **Escuchás tu take.** Mixer con sliders para bajar la voz del artista y
+   subir/bajar tu grabación. Te permite A/B entre el original y vos.
+5. **Historial en SQLite.** Cada sesión se guarda automáticamente. Hay dos
+   paneles filtrables por fecha:
+   - **General**: agregadas de todas las canciones, sparklines de
+     afinación y techo sostenido a lo largo del tiempo.
+   - **Por canción**: progresión específica en una canción.
 
 ---
 
-## 4. El reporte — especificación
+## Cómo se ejecuta
 
-Se genera al finalizar el tema o al cortar. Contiene:
+### Requisitos
 
-- **Afinación (octava-invariante)**:
-  - % de notas afinadas (dentro de ±50 cents), priorizando **notas sostenidas**
-    (sin contar las transiciones, que no son notas).
-  - Error mediano en cents.
-  - Tendencia: si tirás alto (sostenido) o bajo (calado).
-- **Rango (tu voz real)**:
-  - Nota más aguda **sostenida** (tu techo firme) ← dato estrella.
-  - Piso y extensión total.
-- **Vibrato** (si se detecta con claridad): velocidad (Hz) y amplitud (cents).
-- **Dinámica**: qué tan bien seguís los subes y bajas de volumen del original.
-- **Tiempo** (aproximado): qué tan sincronizado estuviste. Etiquetado como
-  aproximado; es el eje más difícil de medir.
-- **Gráficos detallados**: las dos melodías superpuestas + tu afinación coloreada
-  por acierto (verde→rojo) + tu rango.
-- **Coaching (tutor IA)**: traduce los números a feedback accionable. El feedback
-  básico se arma con reglas sobre las métricas (gratis); la explicación profunda /
-  ejercicios se piden **on-demand** a un LLM (control de costo, ver §6).
+- Python 3.10+
+- Node 20+
+- `pnpm` (o `npm` con cambios obvios)
+- `ffmpeg` en el PATH
+- ~3 GB libres en disco para los modelos de Demucs y el cache de WAVs
+
+### Instalar
+
+```bash
+# Python (server + análisis con Demucs/pyin)
+pip install --user \
+    fastapi 'uvicorn[standard]' python-multipart \
+    demucs torch torchaudio torchcrepe librosa soundfile numpy scipy
+
+# Front
+cd web && pnpm install && cd ..
+```
+
+### Correr (2 terminales)
+
+```bash
+# Terminal 1 — server local (FastAPI en :8765, SQLite + cache en .cache/)
+python3 -m server.local_server
+
+# Terminal 2 — front (Vite en :5173)
+cd web && pnpm dev
+```
+
+Abrí **http://127.0.0.1:5173/**. La primera vez que subís una canción tarda
+2-4 minutos (Demucs sobre CPU). Reaparece en milisegundos las próximas veces
+gracias al cache (`.cache/<sha1>/`).
 
 ---
 
-## 5. Compartir
+## En qué se diferencia de UltraStar Deluxe (o cualquier karaoke clásico)
 
-- **Link compartible**: una página pública de solo-lectura con el reporte.
-- **Tarjeta para redes**: una imagen con lo destacado (score, % afinación, nota
-  máxima alcanzada) para mandar a amigos / postear.
-- **Privacidad**: se comparten **las métricas y el gráfico, no el audio** de la
-  grabación.
-
----
-
-## 6. Arquitectura técnica (resumen)
-
-| Pieza | Dónde | Notas |
+| | UltraStar / SingStar / etc. | singimprove |
 |---|---|---|
-| Frontend | Cloudflare Pages (SPA estática) | Casi gratis. |
-| Storage | Cloudflare R2 | Sin egress. MP3 temporal + resultados; **borrar uploads tras procesar**. |
-| Worker pesado | Cloud Run (CPU, scale-to-zero) | Corre Demucs + extracción de pitch (el script de análisis actual). **1 vez por canción, cacheado**. |
-| Job | Asíncrono | subir → encolar → procesar → resultado en storage → el front consulta (polling/webhook). El proceso tarda minutos, **no** es un request sincrónico. |
-| Detección en vivo | Navegador (Web Audio API / YIN, causal y liviano) | Client-side, **gratis** en el equipo del usuario. NO pyin/CREPE (esos son batch/pesados). |
+| **Catálogo** | Necesita archivos `.txt` con notas pre-autoradas por canción (alguien tiene que sentarse a marcar a mano). | Aceptás cualquier MP3. El pipeline (Demucs → pyin → cuantización) genera el carril solo. |
+| **Score** | Puntaje grueso al final (oro/plata/bronce). Pensado como juego. | Reporte analítico: % de notas dentro de ±50¢, error mediano en cents, tendencia alto/bajo, rango sostenido, extensión total. |
+| **Progresión** | No la mide. Cada partida es un evento aislado (o un highscore por canción). | Historial SQLite local, filtrable por fecha, con sparklines por canción y agregadas: la pregunta que responde es *"¿estoy mejorando?"*. |
+| **Reproducción posterior** | No mezcla tu voz con el instrumental. | Mixer post-take con slider para bajar la voz del artista (instrumental = original − vocals separadas por Demucs) y otro para tu grabación. Podés A/B en el momento. |
+| **Comparación de tono** | Estricta, exige clavar la octava de la melodía. | Octava-invariante: si la canción es para barítono y vos sos tenor, cantás en tu octava sin penalización. |
+| **Foco** | Juego social / fiesta. | Herramienta de práctica individual. Sin combos, sin multijugador, sin gamificación. |
+| **Dependencias** | Compilado nativo + librería de canciones a descargar aparte. | Server Python + SPA Preact. Sin cuentas, sin cloud, sin instalación pesada del cliente. |
 
-**Preprocesado de la referencia**: separación con Demucs → extracción de F0 → limpieza
-(compuerta de silencio, filtro de mediana, manejo de octava) → cuantización a
-partitura limpia para el objetivo en vivo + voz cruda para el reporte fino.
-
-**Costo**: ~centavos por análisis (Demucs cacheado + free tier), **cero en idle**.
-La única línea que escala lineal con el uso es el **tutor IA** → llamarlo on-demand,
-no en cada sesión.
+**Resumen:** UltraStar es un juego de karaoke; singimprove es un *coach* que
+mide tu interpretación cuantitativamente sobre cualquier canción y te muestra
+si estás progresando con el tiempo.
 
 ---
 
-## 7. Requisitos no funcionales / consideraciones
+## Estructura
 
-- **Latencia en vivo**: decenas de milisegundos (suficiente para cantar).
-- **Auriculares recomendados**: si la canción sale por parlante, se cuela en el mic.
-  Con auriculares, tu voz queda limpia.
-- **Octava cómoda permitida**: la invariancia de octava deja que cantes en tu
-  registro sin penalización; eso es una decisión, no un error.
-- **Privacidad**: borrar el audio subido tras procesar; no se comparte la grabación.
-- **Licencias / copyright** (riesgo a evaluar antes de escalar): separar voces de
-  grabaciones comerciales tiene implicancias legales. Apoyarse en audio que sube el
-  usuario corre parte del riesgo a un costado, pero hay que mirarlo antes de crecer.
+```
+.
+├── server/                 # FastAPI local
+│   ├── local_server.py     # endpoints: /jobs, /audio, /sessions, /stats
+│   ├── db.py               # SQLite (.cache/sessions.db)
+│   └── requirements.txt
+├── web/                    # Preact + Vite + TS
+│   └── src/
+│       ├── app.tsx         # estados: idle → uploading → processing → ready → playing → done
+│       ├── pitch.ts        # YIN para el mic en vivo (pitchy)
+│       ├── renderer.ts     # carril karaoke en Canvas 2D
+│       ├── overview.ts     # canvas full-song scrollable del reporte
+│       ├── mixer.ts        # Web Audio: instrumental + vocals*(1-atten) + tu voz
+│       ├── report.ts       # métricas locales (afinación, rango, etc.)
+│       ├── history.ts      # cliente del server
+│       └── historyView.tsx # vistas General / Por canción + filtros de fecha
+├── script.py               # motor original: Demucs + extracción de F0 + cuantización
+├── worker_job.py           # entrypoint del job en cloud (no usado en local)
+├── api.py                  # API que dispara el job en cloud (no usada en local)
+└── .cache/                 # gitignored: stems, notes.json, sessions.db
+```
+
+El server local (`server/local_server.py`) envuelve a `script.run_preprocess`,
+así que la lógica pesada vive en `script.py` y no se duplica.
 
 ---
 
-## 8. Futuro (post-v1)
+## Limitaciones conocidas
 
-- **Cuentas de usuario + historial**: guardar todas las sesiones.
-- **Progreso en el tiempo**:
-  - Nota máxima alcanzada (evolución del techo).
-  - Mejora por canción específica (% de afinación a lo largo de las tomas).
-  - Rachas, comparación entre tomas de la misma canción.
-- **Tutor IA más profundo**: planes de práctica adaptativos, ejercicios por debilidad.
-- **Biblioteca de partituras**: posibilidad de consumir charts ya existentes
-  (formato UltraStar) como objetivos limpios y listos, ahorrándose la separación
-  cuando ya hay chart.
-
----
-
-## 9. Fuera de alcance (v1)
-
-- Cuentas de usuario / login / historial (es post-v1).
-- Multijugador / social en vivo.
-- Catálogo licenciado de canciones (v1 trabaja con MP3 que sube el usuario).
-- Detección en vivo de la voz del artista (no se necesita: la referencia se
-  precalcula).
-
+- **Demucs en CPU es lento** (2-4 min por canción de 3-4 min). Si tenés GPU
+  CUDA, `torch` la usa solo.
+- **El mic se graba con `MediaRecorder`** (opus/webm). La latencia
+  audio-in/audio-out del browser puede meter un desfase de unas pocas
+  decenas de ms entre lo que cantás y lo que ves en el carril. No se
+  compensa automáticamente.
+- **Auriculares recomendados**: si la canción sale por parlante, el mic la
+  pisca y el detector se confunde.
+- **No hay análisis de vibrato, dinámica o timing** en el reporte. Esas
+  métricas requieren análisis fino sobre la grabación completa server-side
+  y todavía no están cableadas.
